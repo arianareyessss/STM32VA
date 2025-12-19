@@ -61,6 +61,11 @@ uint32_t pMillis;
 uint32_t Value1 = 0;
 uint32_t Value2 = 0;
 uint16_t Distance  = 0;  // cm
+
+
+uint16_t min = 2400;
+uint16_t max = 600;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -234,9 +239,26 @@ static void leds_off(void){
 
 static void leds_show_red(void){
   leds_off(); HAL_GPIO_WritePin(GPIOA, LED_R_PIN, GPIO_PIN_SET);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, min);
+	HAL_Delay(900);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, max);
+	HAL_Delay(700);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, min);
+	HAL_Delay(900);
+	/*__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 1500);
+	HAL_Delay(300);*/
 }
 static void leds_show_green(void){
   leds_off(); HAL_GPIO_WritePin(GPIOA, LED_G_PIN, GPIO_PIN_SET);
+	// MOVER SERVO VERDE (ej: TIM2 CH2)
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, min);
+	HAL_Delay(900);
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, max);
+	HAL_Delay(700);
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, min);
+	HAL_Delay(900);
+	/*__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 1500);
+	HAL_Delay(300);*/
 }
 static void leds_show_blue(void){
   leds_off(); HAL_GPIO_WritePin(GPIOA, LED_B_PIN, GPIO_PIN_SET);
@@ -348,12 +370,53 @@ int main(void)
     /* USER CODE END 2 */
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+
+  // centro (home)
+  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, min);
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, min);
+  HAL_Delay(300);
+
   /* Infinite loop */
   uint8_t R8,G8,B8;
   uint16_t C;
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+		__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, min);
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, min);
+		HAL_Delay(300);
+
+	  /* HC-04 */
+	  	HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_SET);  // pull the TRIG pin HIGH
+	  	__HAL_TIM_SET_COUNTER(&htim15, 0);
+	  	while (__HAL_TIM_GET_COUNTER (&htim15) < 10);  // wait for 10 us
+	  	HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_RESET);  // pull the TRIG pin low
+
+	  	pMillis = HAL_GetTick(); // used this to avoid infinite while loop  (for timeout)
+	  	// wait for the echo pin to go high
+	  	while (!(HAL_GPIO_ReadPin (ECHO_PORT, ECHO_PIN)) && pMillis + 10 >  HAL_GetTick());
+	  	Value1 = __HAL_TIM_GET_COUNTER (&htim15);
+
+	  	pMillis = HAL_GetTick(); // used this to avoid infinite while loop (for timeout)
+	  	// wait for the echo pin to go low
+	  	while ((HAL_GPIO_ReadPin (ECHO_PORT, ECHO_PIN)) && pMillis + 50 > HAL_GetTick());
+	  	Value2 = __HAL_TIM_GET_COUNTER (&htim15);
+
+	  	Distance = (Value2-Value1)* 0.034/2;
+	  	if (Distance != 5){
+			char m2sg[64];
+			snprintf(m2sg, sizeof(m2sg), "DETECTADOO\r\n");
+			UART_Send(m2sg);
+	  	}
+	  	HAL_Delay(50);
+
+	  	char m1sg[64];
+	  	snprintf(m1sg, sizeof(m1sg), "Distancia: %u cm\r\n", Distance);
+	  	UART_Send(m1sg);
+
+
+
+
     /* SENSOR DE COLOR */
 	getRGBC_255(&R8, &G8, &B8, &C);
 
@@ -374,38 +437,32 @@ int main(void)
 	Color_t col = classify_3colors(R8, G8, B8, C);
 
 	switch(col){
-	case COL_RED:   leds_show_red();   break;
-	case COL_GREEN: leds_show_green(); break;
-	case COL_BLUE:  leds_show_blue();  break;
-	default:        leds_off();        break;
+	  case COL_RED:
+	    leds_show_red();
+
+	    // MOVER SERVO ROJO (ej: TIM1 CH1)
+
+	    break;
+
+	  case COL_GREEN:
+	    leds_show_green();
+	    break;
+
+	  case COL_BLUE:
+	    leds_show_blue();
+	    break;
+
+	  default:
+	    leds_off();
+	    break;
 	}
 
+
 	HAL_Delay(50);
 
-    /* HC-04 */
-	HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_SET);  // pull the TRIG pin HIGH
-	__HAL_TIM_SET_COUNTER(&htim15, 0);
-	while (__HAL_TIM_GET_COUNTER (&htim15) < 10);  // wait for 10 us
-	HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_RESET);  // pull the TRIG pin low
 
-	pMillis = HAL_GetTick(); // used this to avoid infinite while loop  (for timeout)
-	// wait for the echo pin to go high
-	while (!(HAL_GPIO_ReadPin (ECHO_PORT, ECHO_PIN)) && pMillis + 10 >  HAL_GetTick());
-	Value1 = __HAL_TIM_GET_COUNTER (&htim15);
 
-	pMillis = HAL_GetTick(); // used this to avoid infinite while loop (for timeout)
-	// wait for the echo pin to go low
-	while ((HAL_GPIO_ReadPin (ECHO_PORT, ECHO_PIN)) && pMillis + 50 > HAL_GetTick());
-	Value2 = __HAL_TIM_GET_COUNTER (&htim15);
-
-	Distance = (Value2-Value1)* 0.034/2;
-	HAL_Delay(50);
-
-	char m1sg[64];
-	snprintf(m1sg, sizeof(m1sg), "Distancia: %u cm\r\n", Distance);
-	UART_Send(m1sg);
-
-	/*SERVO MOTORES*/
+	/*SERVO MOTORES
 	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 1000);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 1000);
 	HAL_Delay(700);
@@ -418,7 +475,7 @@ int main(void)
 	// 2ms -> 180°
 	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 2000);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 2000);
-	HAL_Delay(700);
+	HAL_Delay(700);*/
   }
   /* USER CODE END 3 */
 }
@@ -834,38 +891,7 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_2 */
 }
 
-
 /* USER CODE BEGIN 4 */
-
-void HAL_TIM_MspPostInit(TIM_HandleTypeDef* htim)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  
-  if(htim->Instance == TIM1)
-  {
-    /* TIM1 PWM Channel 1 - PA8 (Servo 1) */
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    GPIO_InitStruct.Pin = GPIO_PIN_8;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    GPIO_InitStruct.Alternate = GPIO_AF1_TIM1;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-  }
-  
-  if(htim->Instance == TIM2)
-  {
-    /* TIM2 PWM Channel 2 - PA1 (Servo 2) */
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    GPIO_InitStruct.Pin = GPIO_PIN_1;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    GPIO_InitStruct.Alternate = GPIO_AF1_TIM2;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-  }
-}
-
 
 /* USER CODE END 4 */
 
