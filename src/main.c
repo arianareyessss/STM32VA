@@ -1,17 +1,12 @@
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
+ Diseño e Implementación de una Cinta Transportadora con Clasificación por Sensor de Color
   ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * PROYECTO FINAL - SISTEMAS EMBEBIDOS I
+  * Integrantes
+  	  * Alcazar Valeria
+  	  * Reyes Ariana
   *
   ******************************************************************************
   */
@@ -27,20 +22,7 @@
 
 /* USER CODE END Includes */
 
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
 
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c3;
@@ -53,6 +35,8 @@ UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+
+// Definición Pines y variables HC-04
 #define TRIG_PIN GPIO_PIN_1
 #define TRIG_PORT GPIOB
 #define ECHO_PIN GPIO_PIN_0
@@ -62,9 +46,9 @@ uint32_t Value1 = 0;
 uint32_t Value2 = 0;
 uint16_t Distance  = 0;  // cm
 
-
+//Variables Globales -> Ángulo Servo
 uint16_t min = 2400;
-uint16_t max = 600;
+uint16_t max = 1500;
 
 /* USER CODE END PV */
 
@@ -81,9 +65,8 @@ static void MX_USART1_UART_Init(void);
 
 /* USER CODE END PFP */
 
-/* Private user code ---------------------------------------------------------*/
+/* Definición Sensor de color---------------------------------------------------------*/
 #define TCS34725_ADDRESS          (0x29 << 1) /* I2C address */
-/* Datasheet is at https://cdn-shop.adafruit.com/datasheets/TCS34725.pdf */
 #define TCS34725_COMMAND_BIT      (0x80)      /* Command bit */
 #define TCS34725_ENABLE           (0x00)      /* Enable register */
 #define TCS34725_ENABLE_AEN       (0x02)      /* RGBC Enable */
@@ -233,34 +216,71 @@ void getRGB(int *R, int *G, int *B)
 #define LED_G_PIN GPIO_PIN_4
 #define LED_B_PIN GPIO_PIN_5
 
+
+static void servo_smooth(TIM_HandleTypeDef *htim, uint32_t channel,
+                         uint16_t from, uint16_t to,
+                         uint16_t step, uint16_t stepDelayMs)
+{
+  int32_t cur = from;
+  int32_t end = to;
+
+  if (step == 0) step = 1;
+
+  if (cur < end) {
+    for (; cur <= end; cur += step) {
+      __HAL_TIM_SET_COMPARE(htim, channel, (uint16_t)cur);
+      HAL_Delay(stepDelayMs);
+    }
+  } else {
+    for (; cur >= end; cur -= step) {
+      __HAL_TIM_SET_COMPARE(htim, channel, (uint16_t)cur);
+      HAL_Delay(stepDelayMs);
+    }
+  }
+
+  // Asegura que quede exacto en el destino
+  __HAL_TIM_SET_COMPARE(htim, channel, to);
+}
+
 static void leds_off(void){
   HAL_GPIO_WritePin(GPIOA, LED_R_PIN|LED_G_PIN|LED_B_PIN, GPIO_PIN_RESET);
 }
 
 static void leds_show_red(void){
-  leds_off(); HAL_GPIO_WritePin(GPIOA, LED_R_PIN, GPIO_PIN_SET);
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, min);
-	HAL_Delay(900);
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, max);
-	HAL_Delay(700);
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, min);
-	HAL_Delay(900);
-	/*__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 1500);
-	HAL_Delay(300);*/
+	char msg[64];
+	int n = snprintf(msg, sizeof(msg), "COLOR: ROJO\r\n");
+	HAL_UART_Transmit(&huart1, (uint8_t*)msg, n, 100);
+
+
+	leds_off(); HAL_GPIO_WritePin(GPIOA, LED_R_PIN, GPIO_PIN_SET);
+	HAL_Delay(1700);
+	servo_smooth(&htim1, TIM_CHANNEL_1, min, max, 10, 2);  // min->max suave
+	HAL_Delay(200);
+	servo_smooth(&htim1, TIM_CHANNEL_1, max, min, 10, 2);
+
 }
+
+
 static void leds_show_green(void){
-  leds_off(); HAL_GPIO_WritePin(GPIOA, LED_G_PIN, GPIO_PIN_SET);
-	// MOVER SERVO VERDE (ej: TIM2 CH2)
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, min);
-	HAL_Delay(900);
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, max);
-	HAL_Delay(700);
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, min);
-	HAL_Delay(900);
-	/*__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 1500);
-	HAL_Delay(300);*/
+	char msg[64];
+	int n = snprintf(msg, sizeof(msg), "COLOR: VERDE\r\n");
+	HAL_UART_Transmit(&huart1, (uint8_t*)msg, n, 100);
+
+
+	leds_off(); HAL_GPIO_WritePin(GPIOA, LED_G_PIN, GPIO_PIN_SET);
+
+	HAL_Delay(3900);
+	servo_smooth(&htim2, TIM_CHANNEL_2, min, max, 10, 2);  // min->max suave
+	HAL_Delay(200);
+	servo_smooth(&htim2, TIM_CHANNEL_2, max, min, 10, 2);
+
 }
+
+
 static void leds_show_blue(void){
+	char msg[64];
+	int n = snprintf(msg, sizeof(msg), "COLOR: AZUL\r\n");
+	HAL_UART_Transmit(&huart1, (uint8_t*)msg, n, 100);
   leds_off(); HAL_GPIO_WritePin(GPIOA, LED_B_PIN, GPIO_PIN_SET);
 }
 
@@ -278,17 +298,16 @@ static void getRGBC_255(uint8_t *R, uint8_t *G, uint8_t *B, uint16_t *C)
   *B = (uint8_t)((b * 255U) / c);
 }
 
-// -------- SOLO 3 COLORES por RANGOS (con tolerancia) --------
+// -------- 3 COLORES por RANGOS (con tolerancia) --------
 typedef enum { COL_NONE=0, COL_RED, COL_GREEN, COL_BLUE } Color_t;
 
 // 1) “Hay caja” si C supera este umbral.
-// AJÚSTALO mirando tu print cuando NO hay caja vs con caja.
-#define C_PRESENT_MIN  35
+#define C_PRESENT_MIN  100
 
 // 2) Rangos/tolerancias (error permitido)
 // (más grande = más permisivo)
-#define TOL_RED   10
-#define TOL_GREEN 10
+#define TOL_RED   20
+#define TOL_GREEN 20
 #define TOL_BLUE  10
 
 static int in_range(int v, int center, int tol){
@@ -300,21 +319,21 @@ static Color_t classify_3colors(uint8_t R, uint8_t G, uint8_t B, uint16_t C)
 	if (C < C_PRESENT_MIN) return COL_NONE;
 
 	  // ROJO (centro aprox: 197,145,112)
-	  if (in_range(R, 185, TOL_RED) &&
-	      in_range(G, 47, TOL_RED) &&
-	      in_range(B, 39, TOL_RED))
+	  if (in_range(R, 183, TOL_RED) &&
+	      in_range(G, 75, TOL_RED) &&
+	      in_range(B, 70, TOL_RED))
 	    return COL_RED;
 
 	  // VERDE (centro aprox: 210,168,131)
-	  if (in_range(R, 98, TOL_GREEN) &&
-	      in_range(G, 101, TOL_GREEN) &&
-	      in_range(B, 62, TOL_GREEN))
+	  if (in_range(R, 128, TOL_GREEN) &&
+	      in_range(G, 120, TOL_GREEN) &&
+	      in_range(B, 99, TOL_GREEN))
 	    return COL_GREEN;
 
 	  // AZUL (centro aprox: 55,45,45)  (con C>=120 no se va a confundir con “sin caja”)
-	  if (in_range(R, 104, TOL_BLUE) &&
-	      in_range(G, 85, TOL_BLUE) &&
-	      in_range(B, 85, TOL_BLUE))
+	  if (in_range(R, 110, TOL_BLUE) &&
+	      in_range(G, 89, TOL_BLUE) &&
+	      in_range(B, 64, TOL_BLUE))
 	    return COL_BLUE;
 
 	  return COL_NONE;
@@ -326,6 +345,7 @@ static void UART_Send(const char *s)
 {
   HAL_UART_Transmit(&huart2, (uint8_t*)s, (uint16_t)strlen(s), 100);
 }
+
 
 
 /**
@@ -387,51 +407,57 @@ int main(void)
 		HAL_Delay(300);
 
 	  /* HC-04 */
-	  	HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_SET);  // pull the TRIG pin HIGH
+	  	HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_SET);  // trig -> high
 	  	__HAL_TIM_SET_COUNTER(&htim15, 0);
-	  	while (__HAL_TIM_GET_COUNTER (&htim15) < 10);  // wait for 10 us
-	  	HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_RESET);  // pull the TRIG pin low
+	  	while (__HAL_TIM_GET_COUNTER (&htim15) < 10);  //espera 10 us
+	  	HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_RESET);  // trig -> low
 
-	  	pMillis = HAL_GetTick(); // used this to avoid infinite while loop  (for timeout)
-	  	// wait for the echo pin to go high
+	  	pMillis = HAL_GetTick(); // timeout
+	  	// esperamos a que echo esté en high
 	  	while (!(HAL_GPIO_ReadPin (ECHO_PORT, ECHO_PIN)) && pMillis + 10 >  HAL_GetTick());
 	  	Value1 = __HAL_TIM_GET_COUNTER (&htim15);
 
-	  	pMillis = HAL_GetTick(); // used this to avoid infinite while loop (for timeout)
-	  	// wait for the echo pin to go low
+	  	pMillis = HAL_GetTick(); // eviytamos el while loop (timeout)
+	  	//esperamos a que echo esté en low
 	  	while ((HAL_GPIO_ReadPin (ECHO_PORT, ECHO_PIN)) && pMillis + 50 > HAL_GetTick());
 	  	Value2 = __HAL_TIM_GET_COUNTER (&htim15);
 
 	  	Distance = (Value2-Value1)* 0.034/2;
-	  	if (Distance != 5){
-			char m2sg[64];
-			snprintf(m2sg, sizeof(m2sg), "DETECTADOO\r\n");
-			UART_Send(m2sg);
+	  	if (Distance < 5){
+	  		char m2sg[64];
+			int M = snprintf(m2sg, sizeof(m2sg), "DETECTADO\r\n");
+			HAL_UART_Transmit(&huart1, (uint8_t*)m2sg, M, 100);
 	  	}
 	  	HAL_Delay(50);
+
 
 	  	char m1sg[64];
 	  	snprintf(m1sg, sizeof(m1sg), "Distancia: %u cm\r\n", Distance);
 	  	UART_Send(m1sg);
 
 
+	  	char meg[64];
+	  	int n = snprintf(meg, sizeof(meg), "DISTANCIA: %d\r\n", Distance);
+	  	HAL_UART_Transmit(&huart1, (uint8_t*)meg, n, 100);
 
 
     /* SENSOR DE COLOR */
 	getRGBC_255(&R8, &G8, &B8, &C);
-
-	// Debug (opcional)
+	//verificacion
 	char msg[64];
 	snprintf(msg, sizeof(msg), "C:%u R:%u G:%u B:%u\r\n", C, R8, G8, B8);
 	HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
-
+	//verificacion de que no lee los colores que queremos
 	if (classify_3colors(R8, G8, B8, C) == COL_NONE)
 	{
 	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);   // LED ON = OK
+		char ms[64];
+		int n = snprintf(ms, sizeof(ms), "COLOR: NINGUNO\r\n");
+		HAL_UART_Transmit(&huart1, (uint8_t*)ms, n, 100);
 	}
 	else
 	{
-	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET); // LED OFF = FAIL
+	  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET); // LED OFF = fallo
 	}
 
 	Color_t col = classify_3colors(R8, G8, B8, C);
@@ -439,9 +465,6 @@ int main(void)
 	switch(col){
 	  case COL_RED:
 	    leds_show_red();
-
-	    // MOVER SERVO ROJO (ej: TIM1 CH1)
-
 	    break;
 
 	  case COL_GREEN:
@@ -460,22 +483,6 @@ int main(void)
 
 	HAL_Delay(50);
 
-
-
-	/*SERVO MOTORES
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 1000);
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 1000);
-	HAL_Delay(700);
-
-	// 1.5ms -> 90°
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 1500);
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 1500);
-	HAL_Delay(700);
-
-	// 2ms -> 180°
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 2000);
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 2000);
-	HAL_Delay(700);*/
   }
   /* USER CODE END 3 */
 }
