@@ -834,14 +834,16 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_2 */
 }
 
+
 /* USER CODE BEGIN 4 */
+
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef* htim)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   
   if(htim->Instance == TIM1)
   {
-    /* TIM1 PWM Channel 1 - PA8 */
+    /* TIM1 PWM Channel 1 - PA8 (Servo 1) */
     __HAL_RCC_GPIOA_CLK_ENABLE();
     GPIO_InitStruct.Pin = GPIO_PIN_8;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
@@ -853,7 +855,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* htim)
   
   if(htim->Instance == TIM2)
   {
-    /* TIM2 PWM Channel 2 - PA1 */
+    /* TIM2 PWM Channel 2 - PA1 (Servo 2) */
     __HAL_RCC_GPIOA_CLK_ENABLE();
     GPIO_InitStruct.Pin = GPIO_PIN_1;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
@@ -864,13 +866,13 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* htim)
   }
 }
 
+
 /* USER CODE END 4 */
 
 /**
   * @brief  This function is executed in case of error occurrence.
   * @retval None
   */
-
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
