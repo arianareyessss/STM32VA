@@ -259,7 +259,7 @@ static void getRGBC_255(uint8_t *R, uint8_t *G, uint8_t *B, uint16_t *C)
 // -------- SOLO 3 COLORES por RANGOS (con tolerancia) --------
 typedef enum { COL_NONE=0, COL_RED, COL_GREEN, COL_BLUE } Color_t;
 
-// 1) "Hay caja" si C supera este umbral.
+// 1) “Hay caja” si C supera este umbral.
 // AJÚSTALO mirando tu print cuando NO hay caja vs con caja.
 #define C_PRESENT_MIN  35
 
@@ -289,7 +289,7 @@ static Color_t classify_3colors(uint8_t R, uint8_t G, uint8_t B, uint16_t C)
 	      in_range(B, 62, TOL_GREEN))
 	    return COL_GREEN;
 
-	  // AZUL (centro aprox: 55,45,45)  (con C>=120 no se va a confundir con "sin caja")
+	  // AZUL (centro aprox: 55,45,45)  (con C>=120 no se va a confundir con “sin caja”)
 	  if (in_range(R, 104, TOL_BLUE) &&
 	      in_range(G, 85, TOL_BLUE) &&
 	      in_range(B, 85, TOL_BLUE))
@@ -346,7 +346,8 @@ int main(void)
   HAL_TIM_Base_Start(&htim15);
   HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_RESET);  // pull the TRIG pin low
     /* USER CODE END 2 */
-
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   /* Infinite loop */
   uint8_t R8,G8,B8;
   uint16_t C;
@@ -403,6 +404,21 @@ int main(void)
 	char m1sg[64];
 	snprintf(m1sg, sizeof(m1sg), "Distancia: %u cm\r\n", Distance);
 	UART_Send(m1sg);
+
+	/*SERVO MOTORES*/
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 1000);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 1000);
+	HAL_Delay(700);
+
+	// 1.5ms -> 90°
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 1500);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 1500);
+	HAL_Delay(700);
+
+	// 2ms -> 180°
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 2000);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 2000);
+	HAL_Delay(700);
   }
   /* USER CODE END 3 */
 }
@@ -529,6 +545,8 @@ static void MX_TIM1_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
 
   /* USER CODE BEGIN TIM1_Init 1 */
 
@@ -549,6 +567,10 @@ static void MX_TIM1_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
@@ -556,9 +578,36 @@ static void MX_TIM1_Init(void)
   {
     Error_Handler();
   }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.BreakFilter = 0;
+  sBreakDeadTimeConfig.Break2State = TIM_BREAK2_DISABLE;
+  sBreakDeadTimeConfig.Break2Polarity = TIM_BREAK2POLARITY_HIGH;
+  sBreakDeadTimeConfig.Break2Filter = 0;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN TIM1_Init 2 */
 
   /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
 
 }
 
@@ -576,6 +625,7 @@ static void MX_TIM2_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
@@ -595,15 +645,28 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
+  HAL_TIM_MspPostInit(&htim2);
 
 }
 
@@ -772,14 +835,34 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
-// Si el compilador aún necesita la función (aunque no se llame), 
-// puedes dejarla vacía o eliminarla completamente
-// void HAL_TIM_MspPostInit(TIM_HandleTypeDef* htim)
-// {
-//     // Función vacía ya que no usamos PWM
-//     UNUSED(htim);
-// }
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef* htim)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  
+  if(htim->Instance == TIM1)
+  {
+    /* TIM1 PWM Channel 1 - PA8 */
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    GPIO_InitStruct.Pin = GPIO_PIN_8;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF1_TIM1;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  }
+  
+  if(htim->Instance == TIM2)
+  {
+    /* TIM2 PWM Channel 2 - PA1 */
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    GPIO_InitStruct.Pin = GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF1_TIM2;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  }
+}
 
 /* USER CODE END 4 */
 
@@ -787,6 +870,7 @@ static void MX_GPIO_Init(void)
   * @brief  This function is executed in case of error occurrence.
   * @retval None
   */
+
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
